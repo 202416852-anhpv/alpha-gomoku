@@ -133,10 +133,15 @@ function minimax(
   }
 }
 
-function findForcedBlocks(board: BoardState): { row: number; col: number }[] {
+function findThreats(board: BoardState): {
+  halfFour: { row: number; col: number }[];
+  openThree: { row: number; col: number }[];
+} {
   const size = board.length;
-  const blockSet = new Set<number>();
-  const blocks: { row: number; col: number }[] = [];
+  const halfFourSet = new Set<number>();
+  const openThreeSet = new Set<number>();
+  const halfFour: { row: number; col: number }[] = [];
+  const openThree: { row: number; col: number }[] = [];
 
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
@@ -162,7 +167,6 @@ function findForcedBlocks(board: BoardState): { row: number; col: number }[] {
         }
 
         const total = 1 + fwCount + bwCount;
-        if (total !== 4) continue;
 
         const feR = r + dr * (fwCount + 1);
         const feC = c + dc * (fwCount + 1);
@@ -176,24 +180,36 @@ function findForcedBlocks(board: BoardState): { row: number; col: number }[] {
           beR >= 0 && beR < size && beC >= 0 && beC < size &&
           board[beR][beC] === null;
 
-        if (fwdOpen && !bwdOpen) {
-          const key = feR * size + feC;
-          if (!blockSet.has(key)) {
-            blockSet.add(key);
-            blocks.push({ row: feR, col: feC });
+        const openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
+
+        if (total === 4 && openEnds === 1) {
+          const target = fwdOpen
+            ? { row: feR, col: feC }
+            : { row: beR, col: beC };
+          const key = target.row * size + target.col;
+          if (!halfFourSet.has(key)) {
+            halfFourSet.add(key);
+            halfFour.push(target);
           }
-        } else if (!fwdOpen && bwdOpen) {
-          const key = beR * size + beC;
-          if (!blockSet.has(key)) {
-            blockSet.add(key);
-            blocks.push({ row: beR, col: beC });
+        }
+
+        if (total === 3 && openEnds === 2) {
+          const key1 = feR * size + feC;
+          if (!halfFourSet.has(key1) && !openThreeSet.has(key1)) {
+            openThreeSet.add(key1);
+            openThree.push({ row: feR, col: feC });
+          }
+          const key2 = beR * size + beC;
+          if (!halfFourSet.has(key2) && !openThreeSet.has(key2)) {
+            openThreeSet.add(key2);
+            openThree.push({ row: beR, col: beC });
           }
         }
       }
     }
   }
 
-  return blocks;
+  return { halfFour, openThree };
 }
 
 export const getBestMove = (
@@ -219,11 +235,27 @@ export const getBestMove = (
     if (result === "X") return { row, col };
   }
 
-  // Scan board for existing opponent half-fours and force block
-  const forcedBlocks = findForcedBlocks(board);
+  // Scan board for opponent threats and force block
+  const { halfFour, openThree } = findThreats(board);
 
-  if (forcedBlocks.length === 1) {
-    return forcedBlocks[0];
+  if (halfFour.length > 0) {
+    let best = halfFour[0];
+    let bestScore = -Infinity;
+    for (const m of halfFour) {
+      const s = moveScore(board, m.row, m.col, "O");
+      if (s > bestScore) { bestScore = s; best = m; }
+    }
+    return best;
+  }
+
+  if (openThree.length > 0) {
+    let best = openThree[0];
+    let bestScore = -Infinity;
+    for (const m of openThree) {
+      const s = moveScore(board, m.row, m.col, "O");
+      if (s > bestScore) { bestScore = s; best = m; }
+    }
+    return best;
   }
 
   let bestMove = candidates[0];
