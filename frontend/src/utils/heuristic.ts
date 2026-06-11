@@ -1,18 +1,18 @@
 import type { BoardState } from "../types/game";
 
 const WINNING_LENGTH = 5;
-const WIN = 10000000;
-const OPEN_FOUR = 1000000;
-const HALF_FOUR = 800000;
-const OPEN_THREE = 100000;
-const HALF_THREE = 20000;
+const WIN = 100000000;
+const OPEN_FOUR = 50000000;
+const HALF_FOUR = 5000000;
+const OPEN_THREE = 500000;
+const HALF_THREE = 50000;
 const OPEN_TWO = 5000;
 const HALF_TWO = 1000;
 
-const BROKEN_FOUR_2 = 600000;
-const BROKEN_FOUR_1 = 300000;
-const BROKEN_THREE_2 = 50000;
-const BROKEN_THREE_1 = 15000;
+const BROKEN_FOUR_2 = 3000000;
+const BROKEN_FOUR_1 = 500000;
+const BROKEN_THREE_2 = 150000;
+const BROKEN_THREE_1 = 30000;
 
 const DIRECTIONS = [
   [0, 1],
@@ -127,7 +127,7 @@ export const evaluateBoard = (board: BoardState): number => {
       }
 
       if (threatCount >= 2) {
-        const synergyBonus = threatCount === 2 ? HALF_FOUR : OPEN_FOUR;
+        const synergyBonus = threatCount === 2 ? HALF_FOUR * 2 : OPEN_FOUR;
         score += player === "O" ? synergyBonus : -synergyBonus;
       }
     }

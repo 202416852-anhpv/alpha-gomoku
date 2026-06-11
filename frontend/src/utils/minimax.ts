@@ -9,7 +9,7 @@ const DIRECTIONS = [
   [1, -1],
 ];
 
-const TERMINAL_SCORE = 100000000;
+const TERMINAL_SCORE = 1000000000;
 const WINNING_LENGTH = 5;
 const CANDIDATE_DISTANCE = 2;
 
