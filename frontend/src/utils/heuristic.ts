@@ -9,6 +9,11 @@ const HALF_THREE = 20000;
 const OPEN_TWO = 5000;
 const HALF_TWO = 1000;
 
+const BROKEN_FOUR_2 = 600000;
+const BROKEN_FOUR_1 = 300000;
+const BROKEN_THREE_2 = 50000;
+const BROKEN_THREE_1 = 15000;
+
 const DIRECTIONS = [
   [0, 1],
   [1, 0],
@@ -32,6 +37,56 @@ function getLineScore(consecutive: number, openEnds: number): number {
   return THREAT_WEIGHTS[key] ?? 0;
 }
 
+function getGapScore(total: number, openEnds: number): number {
+  if (total >= WINNING_LENGTH) return WIN;
+  if (total === 4 && openEnds === 2) return BROKEN_FOUR_2;
+  if (total === 4 && openEnds === 1) return BROKEN_FOUR_1;
+  if (total === 4 && openEnds === 0) return HALF_FOUR;
+  if (total === 3 && openEnds === 2) return BROKEN_THREE_2;
+  if (total === 3 && openEnds === 1) return BROKEN_THREE_1;
+  if (total === 3 && openEnds === 0) return HALF_THREE;
+  return 0;
+}
+
+type ScanResult = { count: number; open: boolean };
+
+function scanDirection(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  player: string,
+  allowGap: boolean,
+): ScanResult {
+  const size = board.length;
+  let count = 0;
+  let gapUsed = false;
+  let lastIdx = 0;
+
+  for (let i = 1; i < WINNING_LENGTH; i++) {
+    const nr = row + dr * i;
+    const nc = col + dc * i;
+    if (nr < 0 || nr >= size || nc < 0 || nc >= size) break;
+    if (board[nr][nc] === player) {
+      count++;
+      lastIdx = i;
+    } else if (board[nr][nc] === null && allowGap && !gapUsed) {
+      gapUsed = true;
+    } else {
+      break;
+    }
+  }
+
+  const ci = lastIdx + 1;
+  const nr = row + dr * ci;
+  const nc = col + dc * ci;
+  const open =
+    nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === null;
+
+  return { count, open };
+}
+
 export const evaluateBoard = (board: BoardState): number => {
   const size = board.length;
   let score = 0;
@@ -44,58 +99,26 @@ export const evaluateBoard = (board: BoardState): number => {
       let threatCount = 0;
 
       for (const [dr, dc] of DIRECTIONS) {
-        let fwCount = 0;
-        for (let i = 1; i < WINNING_LENGTH; i++) {
-          const nr = row + dr * i;
-          const nc = col + dc * i;
-          if (
-            nr >= 0 &&
-            nr < size &&
-            nc >= 0 &&
-            nc < size &&
-            board[nr][nc] === player
-          ) {
-            fwCount++;
-          } else break;
-        }
+        const fwCont = scanDirection(board, row, col, dr, dc, player, false);
+        const bwCont = scanDirection(board, row, col, -dr, -dc, player, false);
+        const consecutive = 1 + fwCont.count + bwCont.count;
+        const contOpen = (fwCont.open ? 1 : 0) + (bwCont.open ? 1 : 0);
+        const scoreContinuous = getLineScore(consecutive, contOpen);
 
-        let bwCount = 0;
-        for (let i = 1; i < WINNING_LENGTH; i++) {
-          const nr = row - dr * i;
-          const nc = col - dc * i;
-          if (
-            nr >= 0 &&
-            nr < size &&
-            nc >= 0 &&
-            nc < size &&
-            board[nr][nc] === player
-          ) {
-            bwCount++;
-          } else break;
-        }
+        const fwGap = scanDirection(board, row, col, dr, dc, player, true);
+        const totalA = 1 + fwGap.count + bwCont.count;
+        const openA = (fwGap.open ? 1 : 0) + (bwCont.open ? 1 : 0);
 
-        const consecutive = 1 + fwCount + bwCount;
+        const bwGap = scanDirection(board, row, col, -dr, -dc, player, true);
+        const totalB = 1 + fwCont.count + bwGap.count;
+        const openB = (fwCont.open ? 1 : 0) + (bwGap.open ? 1 : 0);
 
-        const fwR = row + dr * (fwCount + 1);
-        const fwC = col + dc * (fwCount + 1);
-        const bwR = row - dr * (bwCount + 1);
-        const bwC = col - dc * (bwCount + 1);
+        const gapTotal = totalA >= totalB ? totalA : totalB;
+        const gapOpen = totalA >= totalB ? openA : openB;
+        const hasGap = gapTotal > consecutive;
+        const scoreGap = hasGap ? getGapScore(gapTotal, gapOpen) : 0;
 
-        const fwdOpen =
-          fwR >= 0 &&
-          fwR < size &&
-          fwC >= 0 &&
-          fwC < size &&
-          board[fwR][fwC] === null;
-        const bwdOpen =
-          bwR >= 0 &&
-          bwR < size &&
-          bwC >= 0 &&
-          bwC < size &&
-          board[bwR][bwC] === null;
-
-        const openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
-        const cellScore = getLineScore(consecutive, openEnds);
+        const cellScore = Math.max(scoreContinuous, scoreGap);
 
         if (cellScore >= HALF_FOUR) threatCount++;
         else if (cellScore >= OPEN_THREE) threatCount++;
