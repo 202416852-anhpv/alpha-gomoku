@@ -118,12 +118,19 @@ export const evaluateBoard = (board: BoardState): number => {
         const hasGap = gapTotal > consecutive;
         const scoreGap = hasGap ? getGapScore(gapTotal, gapOpen) : 0;
 
-        const cellScore = Math.max(scoreContinuous, scoreGap);
+        const useContinuous = scoreContinuous >= scoreGap;
+        const rawScore = useContinuous ? scoreContinuous : scoreGap;
+        const patternLength = useContinuous
+          ? consecutive
+          : gapTotal;
+        const normalizedScore = patternLength > 1
+          ? rawScore / patternLength
+          : rawScore;
 
-        if (cellScore >= HALF_FOUR) threatCount++;
-        else if (cellScore >= OPEN_THREE) threatCount++;
+        if (rawScore >= HALF_FOUR) threatCount++;
+        else if (rawScore >= OPEN_THREE) threatCount++;
 
-        score += player === "O" ? cellScore : -cellScore;
+        score += player === "O" ? normalizedScore : -normalizedScore;
       }
 
       if (threatCount >= 2) {
