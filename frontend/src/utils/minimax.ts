@@ -11,7 +11,7 @@ const DIRECTIONS = [
 
 const TERMINAL_SCORE = 1000000000;
 const WINNING_LENGTH = 5;
-const CANDIDATE_DISTANCE = 2;
+const CANDIDATE_DISTANCE = 1;
 
 function getCandidates(board: BoardState): { row: number; col: number }[] {
   const size = board.length;
@@ -206,7 +206,13 @@ function findDoubleThreats(
 
     for (const [dr, dc] of DIRECTIONS) {
       const { total, openEnds } = analyzeDirection(
-        board, row, col, dr, dc, player, true,
+        board,
+        row,
+        col,
+        dr,
+        dc,
+        player,
+        true,
       );
       const t = classifyThreat(total, openEnds);
       if (t >= THREAT_OPEN_THREE) threatCounts++;
@@ -224,7 +230,10 @@ function findDoubleThreats(
   return result;
 }
 
-function findThreats(board: BoardState, player: Player = "X"): {
+function findThreats(
+  board: BoardState,
+  player: Player = "X",
+): {
   halfFour: { row: number; col: number }[];
   openThree: { row: number; col: number }[];
 } {
@@ -318,7 +327,13 @@ function minimax(
       const { halfFour } = findThreats(board, currentPlayer);
       if (halfFour.length > 0) {
         return minimax(
-          board, 1, alpha, beta, isMaximizing, winningLength, true,
+          board,
+          1,
+          alpha,
+          beta,
+          isMaximizing,
+          winningLength,
+          true,
         );
       }
     }
@@ -376,7 +391,13 @@ function minimax(
     for (const { row, col } of moves) {
       board[row][col] = "O";
       const evalScore = minimax(
-        board, depth - 1, alpha, beta, false, winningLength, inQuiescence,
+        board,
+        depth - 1,
+        alpha,
+        beta,
+        false,
+        winningLength,
+        inQuiescence,
       );
       board[row][col] = null;
       maxEval = Math.max(maxEval, evalScore);
@@ -389,7 +410,13 @@ function minimax(
     for (const { row, col } of moves) {
       board[row][col] = "X";
       const evalScore = minimax(
-        board, depth - 1, alpha, beta, true, winningLength, inQuiescence,
+        board,
+        depth - 1,
+        alpha,
+        beta,
+        true,
+        winningLength,
+        inQuiescence,
       );
       board[row][col] = null;
       minEval = Math.min(minEval, evalScore);
@@ -464,7 +491,12 @@ export const getBestMove = (
     for (const { row, col } of candidates) {
       board[row][col] = "O";
       const score = minimax(
-        board, depth - 1, -Infinity, Infinity, false, winningLength,
+        board,
+        depth - 1,
+        -Infinity,
+        Infinity,
+        false,
+        winningLength,
       );
       board[row][col] = null;
 
