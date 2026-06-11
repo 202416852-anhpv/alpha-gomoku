@@ -10,6 +10,8 @@ const DIRECTIONS = [
 ];
 
 const TERMINAL_SCORE = 100000000;
+const WINNING_LENGTH = 5;
+const CANDIDATE_DISTANCE = 3;
 
 function getCandidates(board: BoardState): { row: number; col: number }[] {
   const size = board.length;
@@ -20,7 +22,7 @@ function getCandidates(board: BoardState): { row: number; col: number }[] {
     for (let c = 0; c < size; c++) {
       if (board[r][c] === null) continue;
       for (const [dr, dc] of DIRECTIONS) {
-        for (let i = 1; i <= 2; i++) {
+        for (let i = 1; i <= CANDIDATE_DISTANCE; i++) {
           const nr = r + dr * i;
           const nc = c + dc * i;
           if (
@@ -133,6 +135,103 @@ function minimax(
   }
 }
 
+type DirectionInfo = {
+  total: number;
+  openEnds: number;
+  fwdEmpty: { row: number; col: number } | null;
+  bwdEmpty: { row: number; col: number } | null;
+};
+
+function analyzeDirection(
+  board: BoardState,
+  row: number,
+  col: number,
+  dr: number,
+  dc: number,
+  player: Player,
+): DirectionInfo {
+  const size = board.length;
+  let fwCount = 0;
+  for (let i = 1; i < WINNING_LENGTH; i++) {
+    const nr = row + dr * i;
+    const nc = col + dc * i;
+    if (nr < 0 || nr >= size || nc < 0 || nc >= size) break;
+    if (board[nr][nc] === player) fwCount++;
+    else break;
+  }
+  let bwCount = 0;
+  for (let i = 1; i < WINNING_LENGTH; i++) {
+    const nr = row - dr * i;
+    const nc = col - dc * i;
+    if (nr < 0 || nr >= size || nc < 0 || nc >= size) break;
+    if (board[nr][nc] === player) bwCount++;
+    else break;
+  }
+  const total = 1 + fwCount + bwCount;
+
+  const feR = row + dr * (fwCount + 1);
+  const feC = col + dc * (fwCount + 1);
+  const fwdOpen = feR >= 0 && feR < size && feC >= 0 && feC < size && board[feR][feC] === null;
+
+  const beR = row - dr * (bwCount + 1);
+  const beC = col - dc * (bwCount + 1);
+  const bwdOpen = beR >= 0 && beR < size && beC >= 0 && beC < size && board[beR][beC] === null;
+
+  const openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
+  return {
+    total,
+    openEnds,
+    fwdEmpty: fwdOpen ? { row: feR, col: feC } : null,
+    bwdEmpty: bwdOpen ? { row: beR, col: beC } : null,
+  };
+}
+
+const THREAT_WIN = 10;
+const THREAT_OPEN_FOUR = 9;
+const THREAT_HALF_FOUR = 8;
+const THREAT_OPEN_THREE = 7;
+const THREAT_HALF_THREE = 3;
+const THREAT_NONE = 0;
+
+function classifyThreat(total: number, openEnds: number): number {
+  if (total >= WINNING_LENGTH) return THREAT_WIN;
+  if (total === 4 && openEnds >= 1) return openEnds === 2 ? THREAT_OPEN_FOUR : THREAT_HALF_FOUR;
+  if (total === 3 && openEnds === 2) return THREAT_OPEN_THREE;
+  if (total === 3 && openEnds === 1) return THREAT_HALF_THREE;
+  return THREAT_NONE;
+}
+
+function findDoubleThreats(
+  board: BoardState,
+  candidates: { row: number; col: number }[],
+  player: Player = "X",
+): { row: number; col: number }[] {
+  const result: { row: number; col: number }[] = [];
+  const seen = new Set<number>();
+  const size = board.length;
+
+  for (const { row, col } of candidates) {
+    board[row][col] = player;
+    let threatCounts = 0;
+
+    for (const [dr, dc] of DIRECTIONS) {
+      const { total, openEnds } = analyzeDirection(board, row, col, dr, dc, player);
+      const t = classifyThreat(total, openEnds);
+      if (t >= THREAT_OPEN_THREE) threatCounts++;
+    }
+
+    board[row][col] = null;
+
+    const key = row * size + col;
+    if (threatCounts >= 2 && !seen.has(key)) {
+      seen.add(key);
+      result.push({ row, col });
+    }
+  }
+
+  return result;
+}
+
 function findThreats(board: BoardState): {
   halfFour: { row: number; col: number }[];
   openThree: { row: number; col: number }[];
@@ -148,44 +247,10 @@ function findThreats(board: BoardState): {
       if (board[r][c] !== "X") continue;
 
       for (const [dr, dc] of DIRECTIONS) {
-        let fwCount = 0;
-        for (let i = 1; i < 5; i++) {
-          const nr = r + dr * i;
-          const nc = c + dc * i;
-          if (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === "X")
-            fwCount++;
-          else break;
-        }
-
-        let bwCount = 0;
-        for (let i = 1; i < 5; i++) {
-          const nr = r - dr * i;
-          const nc = c - dc * i;
-          if (nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === "X")
-            bwCount++;
-          else break;
-        }
-
-        const total = 1 + fwCount + bwCount;
-
-        const feR = r + dr * (fwCount + 1);
-        const feC = c + dc * (fwCount + 1);
-        const fwdOpen =
-          feR >= 0 && feR < size && feC >= 0 && feC < size &&
-          board[feR][feC] === null;
-
-        const beR = r - dr * (bwCount + 1);
-        const beC = c - dc * (bwCount + 1);
-        const bwdOpen =
-          beR >= 0 && beR < size && beC >= 0 && beC < size &&
-          board[beR][beC] === null;
-
-        const openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
+        const { total, openEnds, fwdEmpty, bwdEmpty } = analyzeDirection(board, r, c, dr, dc, "X");
 
         if (total === 4 && openEnds === 1) {
-          const target = fwdOpen
-            ? { row: feR, col: feC }
-            : { row: beR, col: beC };
+          const target = fwdEmpty ?? bwdEmpty!;
           const key = target.row * size + target.col;
           if (!halfFourSet.has(key)) {
             halfFourSet.add(key);
@@ -194,15 +259,15 @@ function findThreats(board: BoardState): {
         }
 
         if (total === 3 && openEnds === 2) {
-          const key1 = feR * size + feC;
+          const key1 = fwdEmpty!.row * size + fwdEmpty!.col;
           if (!halfFourSet.has(key1) && !openThreeSet.has(key1)) {
             openThreeSet.add(key1);
-            openThree.push({ row: feR, col: feC });
+            openThree.push(fwdEmpty!);
           }
-          const key2 = beR * size + beC;
+          const key2 = bwdEmpty!.row * size + bwdEmpty!.col;
           if (!halfFourSet.has(key2) && !openThreeSet.has(key2)) {
             openThreeSet.add(key2);
-            openThree.push({ row: beR, col: beC });
+            openThree.push(bwdEmpty!);
           }
         }
       }
@@ -235,27 +300,33 @@ export const getBestMove = (
     if (result === "X") return { row, col };
   }
 
-  // Scan board for opponent threats and force block
   const { halfFour, openThree } = findThreats(board);
+  const totalThreats = halfFour.length + openThree.length;
 
-  if (halfFour.length > 0) {
-    let best = halfFour[0];
+  const pickBest = (moves: { row: number; col: number }[]) => {
+    let best = moves[0];
     let bestScore = -Infinity;
-    for (const m of halfFour) {
+    for (const m of moves) {
       const s = moveScore(board, m.row, m.col, "O");
-      if (s > bestScore) { bestScore = s; best = m; }
+      if (s > bestScore) {
+        bestScore = s;
+        best = m;
+      }
     }
     return best;
+  };
+
+  if (totalThreats === 1) {
+    if (halfFour.length > 0) return pickBest(halfFour);
+    if (openThree.length > 0) return pickBest(openThree);
   }
 
-  if (openThree.length > 0) {
-    let best = openThree[0];
-    let bestScore = -Infinity;
-    for (const m of openThree) {
-      const s = moveScore(board, m.row, m.col, "O");
-      if (s > bestScore) { bestScore = s; best = m; }
-    }
-    return best;
+  if (totalThreats === 0) {
+    const defensiveDouble = findDoubleThreats(board, candidates, "X");
+    if (defensiveDouble.length > 0) return pickBest(defensiveDouble);
+
+    const offensiveDouble = findDoubleThreats(board, candidates, "O");
+    if (offensiveDouble.length > 0) return pickBest(offensiveDouble);
   }
 
   let bestMove = candidates[0];

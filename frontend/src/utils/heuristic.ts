@@ -1,5 +1,6 @@
 import type { BoardState } from "../types/game";
 
+const WINNING_LENGTH = 5;
 const WIN = 10000000;
 const OPEN_FOUR = 1000000;
 const HALF_FOUR = 800000;
@@ -15,6 +16,22 @@ const DIRECTIONS = [
   [1, -1],
 ];
 
+const THREAT_WEIGHTS: Record<string, number> = {
+  "5": WIN,
+  "4_2": OPEN_FOUR,
+  "4_1": HALF_FOUR,
+  "3_2": OPEN_THREE,
+  "3_1": HALF_THREE,
+  "2_2": OPEN_TWO,
+  "2_1": HALF_TWO,
+};
+
+function getLineScore(consecutive: number, openEnds: number): number {
+  if (consecutive >= WINNING_LENGTH) return THREAT_WEIGHTS["5"];
+  const key = `${consecutive}_${openEnds}`;
+  return THREAT_WEIGHTS[key] ?? 0;
+}
+
 export const evaluateBoard = (board: BoardState): number => {
   const size = board.length;
   let score = 0;
@@ -24,9 +41,11 @@ export const evaluateBoard = (board: BoardState): number => {
       const player = board[row][col];
       if (!player) continue;
 
+      let threatCount = 0;
+
       for (const [dr, dc] of DIRECTIONS) {
         let fwCount = 0;
-        for (let i = 1; i < 5; i++) {
+        for (let i = 1; i < WINNING_LENGTH; i++) {
           const nr = row + dr * i;
           const nc = col + dc * i;
           if (
@@ -41,7 +60,7 @@ export const evaluateBoard = (board: BoardState): number => {
         }
 
         let bwCount = 0;
-        for (let i = 1; i < 5; i++) {
+        for (let i = 1; i < WINNING_LENGTH; i++) {
           const nr = row - dr * i;
           const nc = col - dc * i;
           if (
@@ -76,17 +95,17 @@ export const evaluateBoard = (board: BoardState): number => {
           board[bwR][bwC] === null;
 
         const openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
+        const cellScore = getLineScore(consecutive, openEnds);
 
-        let cellScore = 0;
-        if (consecutive >= 5) cellScore = WIN;
-        else if (consecutive === 4)
-          cellScore = openEnds === 2 ? OPEN_FOUR : openEnds === 1 ? HALF_FOUR : 0;
-        else if (consecutive === 3)
-          cellScore = openEnds === 2 ? OPEN_THREE : openEnds === 1 ? HALF_THREE : 0;
-        else if (consecutive === 2)
-          cellScore = openEnds === 2 ? OPEN_TWO : openEnds === 1 ? HALF_TWO : 0;
+        if (cellScore >= HALF_FOUR) threatCount++;
+        else if (cellScore >= OPEN_THREE) threatCount++;
 
         score += player === "O" ? cellScore : -cellScore;
+      }
+
+      if (threatCount >= 2) {
+        const synergyBonus = threatCount === 2 ? HALF_FOUR : OPEN_FOUR;
+        score += player === "O" ? synergyBonus : -synergyBonus;
       }
     }
   }
