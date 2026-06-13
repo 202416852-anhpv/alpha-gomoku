@@ -111,6 +111,7 @@ function analyzeDirection(
     count: number;
     gapPos: { row: number; col: number } | null;
     open: boolean;
+    lastIdx: number;
   } {
     let count = 0;
     let gapPos: { row: number; col: number } | null = null;
@@ -138,7 +139,7 @@ function analyzeDirection(
     const open =
       nr >= 0 && nr < size && nc >= 0 && nc < size && board[nr][nc] === null;
 
-    return { count, gapPos, open };
+    return { count, gapPos, open, lastIdx };
   }
 
   const fwdA = scan(dr, dc, allowGap);
@@ -150,18 +151,23 @@ function analyzeDirection(
   const totalB = 1 + fwdB.count + bwdB.count;
 
   let fwCount: number, bwCount: number;
+  let fwdLastIdx: number, bwdLastIdx: number;
   let gapPos: { row: number; col: number } | null;
   let fwdOpen: boolean, bwdOpen: boolean;
 
   if (totalA >= totalB) {
     fwCount = fwdA.count;
     bwCount = bwdA.count;
+    fwdLastIdx = fwdA.lastIdx;
+    bwdLastIdx = bwdA.lastIdx;
     gapPos = fwdA.gapPos;
     fwdOpen = fwdA.open;
     bwdOpen = bwdA.open;
   } else {
     fwCount = fwdB.count;
     bwCount = bwdB.count;
+    fwdLastIdx = fwdB.lastIdx;
+    bwdLastIdx = bwdB.lastIdx;
     gapPos = bwdB.gapPos;
     fwdOpen = fwdB.open;
     bwdOpen = bwdB.open;
@@ -170,12 +176,12 @@ function analyzeDirection(
   const total = 1 + fwCount + bwCount;
   const openEnds = (fwdOpen ? 1 : 0) + (bwdOpen ? 1 : 0);
 
-  const feR = row + dr * (fwCount + 1);
-  const feC = col + dc * (fwCount + 1);
+  const feR = row + dr * (fwdLastIdx + 1);
+  const feC = col + dc * (fwdLastIdx + 1);
   const fwdEmpty = fwdOpen ? { row: feR, col: feC } : null;
 
-  const beR = row - dr * (bwCount + 1);
-  const beC = col - dc * (bwCount + 1);
+  const beR = row - dr * (bwdLastIdx + 1);
+  const beC = col - dc * (bwdLastIdx + 1);
   const bwdEmpty = bwdOpen ? { row: beR, col: beC } : null;
 
   return { total, openEnds, fwdEmpty, bwdEmpty, gapPos };
