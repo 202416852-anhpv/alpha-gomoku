@@ -1,49 +1,70 @@
-import { useState, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { type BoardState, type GameResult } from "./types/game";
 import { checkGameResult } from "./utils/gameEngine";
 import Board from "./components/Board";
-import { getBestMove } from "./utils/minimax";
 
 export default function App() {
   const SIZE = 15;
   const WINNING_LENGTH = 5;
-  const [board, setBoard] = useState<BoardState>(
+  const createEmptyBoard = () =>
     Array(SIZE)
       .fill(null)
-      .map(() => Array(SIZE).fill(null)),
-  );
-  const [isAiThinking, setIsAiThinking] = useState(false);
+      .map(() => Array(SIZE).fill(null)) as BoardState;
+
+  const [board, setBoard] = useState<BoardState>(createEmptyBoard);
   const gameResult: GameResult = checkGameResult(board, WINNING_LENGTH);
   const isGameOver = gameResult !== null;
+  const aiThinkingRef = useRef(false);
+  const workerRef = useRef<Worker | null>(null);
+
+  const createWorker = () => {
+    const worker = new Worker(
+      new URL("./utils/aiWorker.ts", import.meta.url),
+      { type: "module" },
+    );
+
+    worker.onmessage = (e: MessageEvent<{ row: number; col: number }>) => {
+      setTimeout(() => {
+        setBoard((prev) => {
+          const newBoard = prev.map((r) => [...r]);
+          newBoard[e.data.row][e.data.col] = "O";
+          return newBoard;
+        });
+        aiThinkingRef.current = false;
+      }, 500);
+    };
+
+    return worker;
+  };
 
   useEffect(() => {
-    if (!isAiThinking) return;
-
-    const timer = setTimeout(() => {
-      setBoard((prev) => {
-        const AIMove = getBestMove(prev, WINNING_LENGTH);
-        const newBoard = prev.map((r) => [...r]);
-        newBoard[AIMove.row][AIMove.col] = "O";
-        return newBoard;
-      });
-      setIsAiThinking(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [isAiThinking]);
+    const worker = createWorker();
+    workerRef.current = worker;
+    return () => worker.terminate();
+  }, []);
 
   const handleSquareClick = (row: number, col: number) => {
-    if (board[row][col] || isGameOver || isAiThinking) return;
+    if (board[row][col] || isGameOver || aiThinkingRef.current) return;
 
-    const humanBoard = board.map((r) => [...r]);
-    humanBoard[row][col] = "X";
-    setBoard(humanBoard);
+    const newBoard = board.map((r) => [...r]);
+    newBoard[row][col] = "X";
+    setBoard(newBoard);
 
-    const resultAfterHuman = checkGameResult(humanBoard, WINNING_LENGTH);
-
+    const resultAfterHuman = checkGameResult(newBoard, WINNING_LENGTH);
     if (resultAfterHuman === null) {
-      setIsAiThinking(true);
+      aiThinkingRef.current = true;
+      workerRef.current?.postMessage({
+        board: newBoard,
+        winningLength: WINNING_LENGTH,
+      });
     }
+  };
+
+  const handleRestart = () => {
+    workerRef.current?.terminate();
+    workerRef.current = createWorker();
+    setBoard(createEmptyBoard());
+    aiThinkingRef.current = false;
   };
 
   return (
@@ -67,6 +88,15 @@ export default function App() {
       <div className="w-160 border border-black">
         <Board board={board} onSquareClick={handleSquareClick} />
       </div>
+
+      {isGameOver && (
+        <button
+          onClick={handleRestart}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+        >
+          Play Again
+        </button>
+      )}
     </div>
   );
 }

@@ -57,10 +57,13 @@ function moveScore(
   col: number,
   player: Player,
 ): number {
+  const prev = board[row][col];
   board[row][col] = player;
-  const score = evaluateBoard(board);
-  board[row][col] = null;
-  return score;
+  try {
+    return evaluateBoard(board);
+  } finally {
+    board[row][col] = prev;
+  }
 }
 
 function orderMoves(
@@ -392,38 +395,46 @@ function minimax(
   if (isMaximizing) {
     let maxEval = -Infinity;
     for (const { row, col } of moves) {
+      const prev = board[row][col];
       board[row][col] = "O";
-      const evalScore = minimax(
-        board,
-        depth - 1,
-        alpha,
-        beta,
-        false,
-        winningLength,
-        inQuiescence,
-      );
-      board[row][col] = null;
-      maxEval = Math.max(maxEval, evalScore);
-      alpha = Math.max(alpha, evalScore);
+      try {
+        const evalScore = minimax(
+          board,
+          depth - 1,
+          alpha,
+          beta,
+          false,
+          winningLength,
+          inQuiescence,
+        );
+        maxEval = Math.max(maxEval, evalScore);
+        alpha = Math.max(alpha, evalScore);
+      } finally {
+        board[row][col] = prev;
+      }
       if (beta <= alpha) break;
     }
     return maxEval;
   } else {
     let minEval = Infinity;
     for (const { row, col } of moves) {
+      const prev = board[row][col];
       board[row][col] = "X";
-      const evalScore = minimax(
-        board,
-        depth - 1,
-        alpha,
-        beta,
-        true,
-        winningLength,
-        inQuiescence,
-      );
-      board[row][col] = null;
-      minEval = Math.min(minEval, evalScore);
-      beta = Math.min(beta, evalScore);
+      try {
+        const evalScore = minimax(
+          board,
+          depth - 1,
+          alpha,
+          beta,
+          true,
+          winningLength,
+          inQuiescence,
+        );
+        minEval = Math.min(minEval, evalScore);
+        beta = Math.min(beta, evalScore);
+      } finally {
+        board[row][col] = prev;
+      }
       if (beta <= alpha) break;
     }
     return minEval;
@@ -436,30 +447,31 @@ export const getBestMove = (
 ): { row: number; col: number } => {
   const TIME_LIMIT = 5000;
   const startTime = performance.now();
+  const wb = board.map((r) => [...r]) as BoardState;
 
-  const candidates = getCandidates(board);
+  const candidates = getCandidates(wb);
 
   for (const { row, col } of candidates) {
-    board[row][col] = "O";
-    const result = checkGameResult(board, winningLength);
-    board[row][col] = null;
+    wb[row][col] = "O";
+    const result = checkGameResult(wb, winningLength);
+    wb[row][col] = null;
     if (result === "O") return { row, col };
   }
 
   for (const { row, col } of candidates) {
-    board[row][col] = "X";
-    const result = checkGameResult(board, winningLength);
-    board[row][col] = null;
+    wb[row][col] = "X";
+    const result = checkGameResult(wb, winningLength);
+    wb[row][col] = null;
     if (result === "X") return { row, col };
   }
 
-  const { halfFour, openThree } = findThreats(board, "X");
+  const { halfFour, openThree } = findThreats(wb, "X");
 
   const pickBest = (moves: { row: number; col: number }[]) => {
     let best = moves[0];
     let bestScore = -Infinity;
     for (const m of moves) {
-      const s = moveScore(board, m.row, m.col, "O");
+      const s = moveScore(wb, m.row, m.col, "O");
       if (s > bestScore || (s === bestScore && Math.random() < 0.5)) {
         bestScore = s;
         best = m;
@@ -476,7 +488,7 @@ export const getBestMove = (
     return pickBest(openThree);
   }
 
-  const ourThreats = findThreats(board, "O");
+  const ourThreats = findThreats(wb, "O");
   if (ourThreats.halfFour.length > 0) {
     return pickBest(ourThreats.halfFour);
   }
@@ -484,10 +496,10 @@ export const getBestMove = (
     return pickBest(ourThreats.openThree);
   }
 
-  const defensiveDouble = findDoubleThreats(board, candidates, "X");
+  const defensiveDouble = findDoubleThreats(wb, candidates, "X");
   if (defensiveDouble.length > 0) return pickBest(defensiveDouble);
 
-  const offensiveDouble = findDoubleThreats(board, candidates, "O");
+  const offensiveDouble = findDoubleThreats(wb, candidates, "O");
   if (offensiveDouble.length > 0) return pickBest(offensiveDouble);
 
   let bestMove = candidates[0];
@@ -497,19 +509,19 @@ export const getBestMove = (
     let currentBestScore = -Infinity;
     let completed = true;
 
-    orderMoves(board, candidates, "O");
+    orderMoves(wb, candidates, "O");
 
     for (const { row, col } of candidates) {
-      board[row][col] = "O";
+      wb[row][col] = "O";
       const score = minimax(
-        board,
+        wb,
         depth - 1,
         -Infinity,
         Infinity,
         false,
         winningLength,
       );
-      board[row][col] = null;
+      wb[row][col] = null;
 
       if (score > currentBestScore || (score === currentBestScore && Math.random() < 0.5)) {
         currentBestScore = score;
