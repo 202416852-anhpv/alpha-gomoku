@@ -72,7 +72,10 @@ function orderMoves(
     ...m,
     score: moveScore(board, m.row, m.col, player),
   }));
-  scored.sort((a, b) => b.score - a.score);
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return Math.random() - 0.5;
+  });
   for (let i = 0; i < moves.length; i++) {
     moves[i] = scored[i];
   }
@@ -457,7 +460,7 @@ export const getBestMove = (
     let bestScore = -Infinity;
     for (const m of moves) {
       const s = moveScore(board, m.row, m.col, "O");
-      if (s > bestScore) {
+      if (s > bestScore || (s === bestScore && Math.random() < 0.5)) {
         bestScore = s;
         best = m;
       }
@@ -471,6 +474,14 @@ export const getBestMove = (
 
   if (openThree.length > 0) {
     return pickBest(openThree);
+  }
+
+  const ourThreats = findThreats(board, "O");
+  if (ourThreats.halfFour.length > 0) {
+    return pickBest(ourThreats.halfFour);
+  }
+  if (ourThreats.openThree.length > 0) {
+    return pickBest(ourThreats.openThree);
   }
 
   const defensiveDouble = findDoubleThreats(board, candidates, "X");
@@ -500,7 +511,7 @@ export const getBestMove = (
       );
       board[row][col] = null;
 
-      if (score > currentBestScore) {
+      if (score > currentBestScore || (score === currentBestScore && Math.random() < 0.5)) {
         currentBestScore = score;
         currentBestMove = { row, col };
       }

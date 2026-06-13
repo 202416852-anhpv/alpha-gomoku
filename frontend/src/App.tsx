@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { type BoardState, type GameResult } from "./types/game";
 import { checkGameResult } from "./utils/gameEngine";
 import Board from "./components/Board";
@@ -12,11 +12,28 @@ export default function App() {
       .fill(null)
       .map(() => Array(SIZE).fill(null)),
   );
+  const [isAiThinking, setIsAiThinking] = useState(false);
   const gameResult: GameResult = checkGameResult(board, WINNING_LENGTH);
   const isGameOver = gameResult !== null;
 
+  useEffect(() => {
+    if (!isAiThinking) return;
+
+    const timer = setTimeout(() => {
+      setBoard((prev) => {
+        const AIMove = getBestMove(prev, WINNING_LENGTH);
+        const newBoard = prev.map((r) => [...r]);
+        newBoard[AIMove.row][AIMove.col] = "O";
+        return newBoard;
+      });
+      setIsAiThinking(false);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [isAiThinking]);
+
   const handleSquareClick = (row: number, col: number) => {
-    if (board[row][col] || isGameOver) return;
+    if (board[row][col] || isGameOver || isAiThinking) return;
 
     const humanBoard = board.map((r) => [...r]);
     humanBoard[row][col] = "X";
@@ -25,13 +42,7 @@ export default function App() {
     const resultAfterHuman = checkGameResult(humanBoard, WINNING_LENGTH);
 
     if (resultAfterHuman === null) {
-      setTimeout(() => {
-        const AIMove = getBestMove(humanBoard, WINNING_LENGTH);
-
-        const AIBoard = humanBoard.map((r) => [...r]);
-        AIBoard[AIMove.row][AIMove.col] = "O";
-        setBoard(AIBoard);
-      }, 500);
+      setIsAiThinking(true);
     }
   };
 
